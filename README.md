@@ -289,19 +289,4 @@ Each module is already interface-isolated for zero-logic-change upgrades:
 
 Zero logic changes — only wrapping.
 
----
 
-## Out of Scope (this version)
-
-- Multi-hop arbitrage (SOL → BONK → USDC → SOL)
-- Flash loan integration
-- Cross-chain arbitrage
-- Liquidation / NFT floor arb
-- Rust rewrite
-
----
-
-## Legal
-
-DEX arbitrage is legal, beneficial to markets, and fully on-chain transparent.
-This bot does **not** front-run users or exploit smart contract vulnerabilities.
