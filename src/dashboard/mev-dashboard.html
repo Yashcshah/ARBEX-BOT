@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ARBEX &#x2014; Solana MEV Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    /* ── Reset & Base ─────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:     #0d1117;
+      --card:   #161b22;
+      --border: #21262d;
+      --text:   #c9d1d9;
+      --muted:  #8b949e;
+      --green:  #00ff88;
+      --red:    #ff4444;
+      --yellow: #ffaa00;
+      --blue:   #58a6ff;
+      --font:   'Fira Code', monospace;
+      --radius: 8px;
+      --gap:    12px;
+    }
+
+    html, body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 13px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ── Header ───────────────────────────────────────────────────────────── */
+    #header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 24px;
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    #logo {
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: 3px;
+      color: var(--green);
+      text-shadow: 0 0 16px rgba(0, 255, 136, 0.4);
+    }
+
+    #logo span {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 300;
+      letter-spacing: 1px;
+      margin-left: 10px;
+    }
+
+    #header-right {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+
+    #clock { color: var(--muted); font-size: 12px; }
+
+    #conn-status {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    #conn-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--red);
+      box-shadow: 0 0 6px var(--red);
+      transition: background 0.3s, box-shadow 0.3s;
+    }
+
+    #conn-dot.connected {
+      background: var(--green);
+      box-shadow: 0 0 8px rgba(0, 255, 136, 0.7);
+    }
+
+    /* ── Main layout ──────────────────────────────────────────────────────── */
+    #main {
+      padding: 20px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: var(--gap);
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+
+    /* ── Card base ────────────────────────────────────────────────────────── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+    }
+
+    .card-title {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+    }
+
+    /* ── P&L strip ────────────────────────────────────────────────────────── */
+    #pnl-strip {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--gap);
+    }
+
+    .pnl-item {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .pnl-label {
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .pnl-value {
+      font-size: 26px;
+      font-weight: 600;
+      color: var(--green);
+      line-height: 1.2;
+      transition: color 0.3s;
+    }
+
+    .pnl-value.negative { color: var(--red); }
+    .pnl-value.neutral  { color: var(--yellow); }
+
+    /* ── Stats row ────────────────────────────────────────────────────────── */
+    #stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: var(--gap);
+    }
+
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .stat-label {
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .stat-value {
+      font-size: 20px;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    /* ── Two-column body ──────────────────────────────────────────────────── */
+    #body-row {
+      display: grid;
+      grid-template-columns: 60% 40%;
+      gap: var(--gap);
+      align-items: start;
+    }
+
+    /* ── Live Feed table ──────────────────────────────────────────────────── */
+    #feed-table-wrap { overflow-x: auto; }
+
+    #feed-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    #feed-table thead th {
+      text-align: left;
+      padding: 8px 10px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    #feed-table tbody tr {
+      border-bottom: 1px solid rgba(33, 38, 45, 0.6);
+      transition: background 0.2s;
+    }
+
+    #feed-table tbody tr:hover { background: rgba(255, 255, 255, 0.02); }
+
+    #feed-table tbody td {
+      padding: 7px 10px;
+      white-space: nowrap;
+      color: var(--text);
+    }
+
+    .row-landed { animation: flashGreen 1.2s ease forwards; }
+    .row-failed { animation: flashRed   1.2s ease forwards; }
+
+    @keyframes flashGreen {
+      0%   { background: rgba(0, 255, 136, 0.18); }
+      100% { background: transparent; }
+    }
+
+    @keyframes flashRed {
+      0%   { background: rgba(255, 68, 68, 0.18); }
+      100% { background: transparent; }
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+    }
+
+    .badge-green { background: rgba(0, 255, 136, 0.12); color: var(--green); }
+    .badge-red   { background: rgba(255, 68,  68,  0.12); color: var(--red); }
+
+    .profit-pos { color: var(--green); }
+    .profit-neg { color: var(--red); }
+    .spread-val { color: var(--yellow); }
+
+    /* ── Right column ─────────────────────────────────────────────────────── */
+    #right-col {
+      display: flex;
+      flex-direction: column;
+      gap: var(--gap);
+    }
+
+    /* ── Progress bar ─────────────────────────────────────────────────────── */
+    .progress-wrap { margin: 10px 0 4px; }
+
+    .progress-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 5px;
+    }
+
+    .progress-bar-bg {
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: var(--green);
+      width: 0%;
+      transition: width 0.4s ease, background 0.4s ease;
+    }
+
+    .progress-bar-fill.warn   { background: var(--yellow); }
+    .progress-bar-fill.danger { background: var(--red); }
+
+    /* ── Safety details ───────────────────────────────────────────────────── */
+    .safety-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(33, 38, 45, 0.5);
+      font-size: 12px;
+    }
+
+    .safety-row:last-child { border-bottom: none; }
+    .safety-key { color: var(--muted); }
+    .safety-val { color: var(--text); font-weight: 500; }
+
+    /* ── Blacklist ────────────────────────────────────────────────────────── */
+    #blacklist-wrap { margin-top: 10px; }
+
+    .blacklist-label {
+      font-size: 10px;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    #blacklist-items {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+
+    .blacklist-token {
+      background: rgba(255, 68, 68, 0.1);
+      color: var(--red);
+      border: 1px solid rgba(255, 68, 68, 0.25);
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 10px;
+      font-family: var(--font);
+    }
+
+    .empty-label {
+      color: var(--muted);
+      font-size: 11px;
+      font-style: italic;
+    }
+
+    /* ── Alerts ───────────────────────────────────────────────────────────── */
+    #alerts-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .alert-item {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 8px 10px;
+      border-radius: 5px;
+      font-size: 11px;
+      background: rgba(255, 255, 255, 0.02);
+      border-left: 3px solid var(--muted);
+    }
+
+    .alert-item.warn  { border-left-color: var(--yellow); background: rgba(255, 170, 0,  0.05); }
+    .alert-item.error { border-left-color: var(--red);    background: rgba(255, 68,  68, 0.05); }
+    .alert-item.info  { border-left-color: var(--blue);   background: rgba(88,  166, 255, 0.05); }
+
+    .alert-time { color: var(--muted); white-space: nowrap; flex-shrink: 0; }
+    .alert-msg  { color: var(--text); }
+
+    /* ── Responsive ───────────────────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      #pnl-strip { grid-template-columns: 1fr; }
+      #stats-row { grid-template-columns: repeat(2, 1fr); }
+      #body-row  { grid-template-columns: 1fr; }
+    }
+
+    /* ── Scrollbar ────────────────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ─────────────────────────────────────────────────────────────── -->
+<div id="header">
+  <div id="logo">
+    ARBEX<span>Solana MEV</span>
+  </div>
+  <div id="header-right">
+    <div id="clock">--:--:--</div>
+    <div id="conn-status">
+      <div id="conn-dot"></div>
+      <span id="conn-label">Disconnected</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── Main ───────────────────────────────────────────────────────────────── -->
+<div id="main">
+
+  <!-- P&L strip -->
+  <div id="pnl-strip">
+    <div class="pnl-item">
+      <div class="pnl-label">Net Profit Today</div>
+      <div class="pnl-value" id="pnl-today">$0.00</div>
+    </div>
+    <div class="pnl-item">
+      <div class="pnl-label">All-Time Net Profit</div>
+      <div class="pnl-value" id="pnl-alltime">$0.00</div>
+    </div>
+    <div class="pnl-item">
+      <div class="pnl-label">Win Rate</div>
+      <div class="pnl-value" id="pnl-winrate">0.00%</div>
+    </div>
+  </div>
+
+  <!-- Stats row -->
+  <div id="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Total Trades</div>
+      <div class="stat-value" id="stat-total">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Wins</div>
+      <div class="stat-value" style="color:var(--green)" id="stat-wins">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Losses</div>
+      <div class="stat-value" style="color:var(--red)" id="stat-losses">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Best Spread Today</div>
+      <div class="stat-value" style="color:var(--yellow)" id="stat-spread">0.00%</div>
+    </div>
+  </div>
+
+  <!-- Two-column body -->
+  <div id="body-row">
+
+    <!-- Left: Live Feed -->
+    <div class="card">
+      <div class="card-title">Live Feed</div>
+      <div id="feed-table-wrap">
+        <table id="feed-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Token</th>
+              <th>Buy DEX</th>
+              <th>Sell DEX</th>
+              <th>Spread%</th>
+              <th>Net Profit</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="feed-tbody">
+            <tr>
+              <td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">
+                Waiting for trades&#x2026;
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Right column -->
+    <div id="right-col">
+
+      <!-- Safety Status -->
+      <div class="card">
+        <div class="card-title">Safety Status</div>
+
+        <div class="safety-row">
+          <span class="safety-key">Active Jito Tip</span>
+          <span class="safety-val" id="safety-tip">&#x2014; lamports</span>
+        </div>
+
+        <div class="progress-wrap">
+          <div class="progress-labels">
+            <span>Daily Loss</span>
+            <span><span id="safety-loss-val">$0.00</span> / $5.00 limit</span>
+          </div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="safety-loss-bar"></div>
+          </div>
+        </div>
+
+        <div id="blacklist-wrap">
+          <div class="blacklist-label">Blacklisted Tokens</div>
+          <div id="blacklist-items">
+            <span class="empty-label">None</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Alerts -->
+      <div class="card">
+        <div class="card-title">Alerts</div>
+        <div id="alerts-list">
+          <div class="empty-label" style="padding:4px 0;">No alerts yet.</div>
+        </div>
+      </div>
+
+    </div><!-- /right-col -->
+  </div><!-- /body-row -->
+</div><!-- /main -->
+
+<script>
+  (function () {
+    'use strict';
+
+    /* ── Constants ──────────────────────────────────────────────────────── */
+    var MAX_FEED_ROWS = 20;
+    var MAX_ALERTS    = 5;
+    var RECONNECT_MS  = 3000;
+    var WS_URL        = 'ws://localhost:3001';
+
+    /* ── State ──────────────────────────────────────────────────────────── */
+    var ws              = null;
+    var feedRows        = [];
+    var alerts          = [];
+    var bestSpreadToday = 0;
+
+    /* ── Formatting helpers ─────────────────────────────────────────────── */
+    function fmtUsd(v) {
+      var abs = Math.abs(v).toFixed(2);
+      return (v >= 0 ? '+' : '-') + '$' + abs;
+    }
+
+    function fmtUsdAbs(v) {
+      return '$' + Math.abs(v).toFixed(2);
+    }
+
+    function fmtPct(v) {
+      return Number(v).toFixed(2) + '%';
+    }
+
+    function fmtTime(ms) {
+      return new Date(ms).toLocaleTimeString('en-US', { hour12: false });
+    }
+
+    function esc(s) {
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function shortAddr(addr) {
+      addr = String(addr || '');
+      if (addr.length <= 10) return addr;
+      return addr.slice(0, 4) + '\u2026' + addr.slice(-4);
+    }
+
+    /* ── Clock ──────────────────────────────────────────────────────────── */
+    function updateClock() {
+      document.getElementById('clock').textContent =
+        new Date().toLocaleTimeString('en-US', { hour12: false });
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    /* ── Connection status ──────────────────────────────────────────────── */
+    function setConnected(ok) {
+      var dot   = document.getElementById('conn-dot');
+      var label = document.getElementById('conn-label');
+      if (ok) {
+        dot.classList.add('connected');
+        label.textContent = 'Connected';
+      } else {
+        dot.classList.remove('connected');
+        label.textContent = 'Disconnected';
+      }
+    }
+
+    /* ── WebSocket ──────────────────────────────────────────────────────── */
+    function connect() {
+      try {
+        ws = new WebSocket(WS_URL);
+      } catch (e) {
+        setConnected(false);
+        setTimeout(connect, RECONNECT_MS);
+        return;
+      }
+
+      ws.onopen = function () {
+        setConnected(true);
+      };
+
+      ws.onclose = function () {
+        setConnected(false);
+        setTimeout(connect, RECONNECT_MS);
+      };
+
+      ws.onerror = function () {
+        setConnected(false);
+        ws.close();
+      };
+
+      ws.onmessage = function (e) {
+        var event;
+        try { event = JSON.parse(e.data); } catch (x) { return; }
+        handleEvent(event);
+      };
+    }
+
+    /* ── Event dispatcher ───────────────────────────────────────────────── */
+    function handleEvent(event) {
+      if (!event || !event.type) return;
+      switch (event.type) {
+        case 'trade':      onTrade(event.payload);  break;
+        case 'pnl_update': onPnL(event.payload);    break;
+        case 'status':     onPnL(event.payload);    break;
+        case 'alert':      onAlert(event.payload);  break;
+        case 'prices':     /* reserved */           break;
+      }
+    }
+
+    /* ── P&L update ─────────────────────────────────────────────────────── */
+    function onPnL(state) {
+      if (!state) return;
+
+      var win_arr  = Array.isArray(state.tradeWindow) ? state.tradeWindow : [];
+      var winCount = 0;
+      for (var i = 0; i < win_arr.length; i++) { if (win_arr[i]) winCount++; }
+      var winRate  = win_arr.length > 0 ? (winCount / win_arr.length) * 100 : 0;
+
+      /* dailyLoss is stored as a positive magnitude of loss in PnLState */
+      var dailyLoss = Math.abs(state.dailyLoss || 0);
+      var netToday  = -dailyLoss;
+      var allTime   = typeof state.netProfit === 'number' ? state.netProfit : 0;
+
+      setValColor('pnl-today',   fmtUsd(netToday), netToday);
+      setValColor('pnl-alltime', fmtUsd(allTime),  allTime);
+
+      var wrEl = document.getElementById('pnl-winrate');
+      wrEl.textContent = fmtPct(winRate);
+      wrEl.className   = 'pnl-value' +
+        (winRate >= 50 ? '' : winRate >= 30 ? ' neutral' : ' negative');
+
+      document.getElementById('stat-total').textContent  = state.totalTrades || 0;
+      document.getElementById('stat-wins').textContent   = state.wins        || 0;
+      document.getElementById('stat-losses').textContent = state.losses      || 0;
+      document.getElementById('stat-spread').textContent = fmtPct(bestSpreadToday);
+
+      /* Safety: daily loss progress bar ($5.00 limit) */
+      var LIMIT   = 5.00;
+      var lossPct = Math.min((dailyLoss / LIMIT) * 100, 100);
+      document.getElementById('safety-loss-val').textContent = fmtUsdAbs(dailyLoss);
+      var bar = document.getElementById('safety-loss-bar');
+      bar.style.width = lossPct + '%';
+      bar.className   = 'progress-bar-fill' +
+        (lossPct >= 80 ? ' danger' : lossPct >= 50 ? ' warn' : '');
+
+      renderBlacklist(state.blacklistedTokens || []);
+    }
+
+    function setValColor(id, text, num) {
+      var el = document.getElementById(id);
+      el.textContent = text;
+      el.className   = 'pnl-value' + (num > 0 ? '' : num < 0 ? ' negative' : ' neutral');
+    }
+
+    /* ── Trade update ───────────────────────────────────────────────────── */
+    function onTrade(trade) {
+      if (!trade) return;
+
+      if (typeof trade.spreadPct === 'number' && trade.spreadPct > bestSpreadToday) {
+        bestSpreadToday = trade.spreadPct;
+        document.getElementById('stat-spread').textContent = fmtPct(bestSpreadToday);
+      }
+
+      feedRows.unshift(trade);
+      if (feedRows.length > MAX_FEED_ROWS) feedRows.pop();
+      renderFeed();
+    }
+
+    /* ── Alert update ───────────────────────────────────────────────────── */
+    function onAlert(alert) {
+      if (!alert) return;
+      alerts.unshift(alert);
+      if (alerts.length > MAX_ALERTS) alerts.pop();
+      renderAlerts();
+    }
+
+    /* ── Render: Feed ───────────────────────────────────────────────────── */
+    function renderFeed() {
+      var tbody = document.getElementById('feed-tbody');
+      if (feedRows.length === 0) {
+        tbody.innerHTML =
+          '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">' +
+          'Waiting for trades&#x2026;</td></tr>';
+        return;
+      }
+
+      var html = '';
+      for (var i = 0; i < feedRows.length; i++) {
+        var t       = feedRows[i];
+        var landed  = t.landed !== false;
+        var profit  = typeof t.profit    === 'number' ? t.profit
+                    : typeof t.netProfit === 'number' ? t.netProfit : 0;
+        var spread  = typeof t.spreadPct === 'number' ? t.spreadPct : 0;
+        var timeStr = t.timestamp ? fmtTime(t.timestamp) : '--';
+        var symbol  = t.tokenSymbol || shortAddr(t.token || '');
+        var buyDex  = t.buyDex  || '\u2014';
+        var sellDex = t.sellDex || '\u2014';
+        var rowCls  = i === 0 ? (landed ? ' row-landed' : ' row-failed') : '';
+        var badge   = landed
+          ? '<span class="badge badge-green">&#x2705; Landed</span>'
+          : '<span class="badge badge-red">&#x274C; Failed</span>';
+
+        html +=
+          '<tr class="' + rowCls + '">' +
+          '<td>' + esc(timeStr) + '</td>' +
+          '<td style="color:var(--blue)">' + esc(symbol) + '</td>' +
+          '<td>' + esc(buyDex)  + '</td>' +
+          '<td>' + esc(sellDex) + '</td>' +
+          '<td class="spread-val">' + fmtPct(spread) + '</td>' +
+          '<td class="' + (profit >= 0 ? 'profit-pos' : 'profit-neg') + '">' + fmtUsd(profit) + '</td>' +
+          '<td>' + badge + '</td>' +
+          '</tr>';
+      }
+
+      tbody.innerHTML = html;
+    }
+
+    /* ── Render: Blacklist ──────────────────────────────────────────────── */
+    function renderBlacklist(tokens) {
+      var wrap = document.getElementById('blacklist-items');
+      if (!tokens || tokens.length === 0) {
+        wrap.innerHTML = '<span class="empty-label">None</span>';
+        return;
+      }
+      var html = '';
+      for (var i = 0; i < tokens.length; i++) {
+        html += '<span class="blacklist-token">' + esc(shortAddr(tokens[i])) + '</span>';
+      }
+      wrap.innerHTML = html;
+    }
+
+    /* ── Render: Alerts ─────────────────────────────────────────────────── */
+    function renderAlerts() {
+      var list = document.getElementById('alerts-list');
+      if (alerts.length === 0) {
+        list.innerHTML = '<div class="empty-label" style="padding:4px 0;">No alerts yet.</div>';
+        return;
+      }
+      var html = '';
+      for (var i = 0; i < alerts.length; i++) {
+        var a       = alerts[i];
+        var level   = esc(a.level || 'info');
+        var timeStr = a.timestamp ? fmtTime(a.timestamp) : '--';
+        html +=
+          '<div class="alert-item ' + level + '">' +
+          '<span class="alert-time">' + esc(timeStr)        + '</span>' +
+          '<span class="alert-msg">'  + esc(a.message || '') + '</span>' +
+          '</div>';
+      }
+      list.innerHTML = html;
+    }
+
+    /* ── Init ───────────────────────────────────────────────────────────── */
+    connect();
+
+  }());
+</script>
+</body>
+</html>
